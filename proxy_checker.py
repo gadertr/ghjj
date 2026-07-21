@@ -1,87 +1,78 @@
 import asyncio
 import httpx
 import re
+import argparse
 import os
 
-# تنظیمات
-TIMEOUT = 10  # ثانیه
+TIMEOUT = 10
 TEST_URL = "http://www.google.com"
-CONCURRENT_TESTS = 50  # تعداد تست همزمان
+CONCURRENT_TESTS = 100
 
 async def check_proxy(proxy_url):
-    """تست دقیق یک پروکسی"""
     proxy_url = proxy_url.strip()
+    if not proxy_url: return None
+    
+    # اگر پروتکل نداشت، پیش‌فرض http اضافه کن
     if not re.match(r'^(http|https|socks4|socks5)://', proxy_url):
-        # اگر پروتکل نداشت، پیش‌فرض http فرض می‌شود
         proxy_url = "http://" + proxy_url
 
     try:
-        async with httpx.AsyncClient(proxies=proxy_url, timeout=TIMEOUT) as client:
+        async with httpx.AsyncClient(proxies={"all://": proxy_url}, timeout=TIMEOUT, verify=False) as client:
             response = await client.get(TEST_URL)
             if response.status_code == 200:
-                print(f"[✅ VALID] {proxy_url}")
                 return proxy_url
-    except Exception:
+    except:
         pass
     return None
 
 async def main():
-    print("--- Proxy Checker Professional ---")
-    print("1. Import from file (list.txt)")
-    print("2. Paste proxies (End with Ctrl+D or Ctrl+Z)")
-    print("3. Import from Link (Sub link)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--manual', type=str, help='Pasted proxies')
+    parser.add_argument('--links', type=str, help='Subscription links')
+    parser.add_argument('--file', type=str, help='File path in repo')
+    args = parser.parse_args()
+
+    raw_data = []
+
+    # ۱. دریافت از کپی-پیست
+    if args.manual:
+        raw_data.append(args.manual)
+
+    # ۲. دریافت از لینک‌های ساب
+    if args.links:
+        links = args.links.split(',')
+        async with httpx.AsyncClient() as client:
+            for link in links:
+                try:
+                    resp = await client.get(link.strip())
+                    raw_data.append(resp.text)
+                except:
+                    print(f"Error fetching link: {link}")
+
+    # ۳. دریافت از فایل داخل ریپازیتوری
+    if args.file and os.path.exists(args.file):
+        with open(args.file, 'r') as f:
+            raw_data.append(f.read())
+
+    # استخراج پروکسی‌ها با Regex
+    all_text = "\n".join(raw_data)
+    # پیدا کردن الگوهای http://ip:port یا ip:port خالی
+    pattern = r'((?:socks4|socks5|http|https)://[\w\.-]+:\d+|[\d\.]+:\d+)'
+    proxies = list(set(re.findall(pattern, all_text)))
     
-    choice = input("Select choice (1/2/3): ")
-    raw_proxies = []
+    print(f"Total proxies found: {len(proxies)}")
+    print("Testing starts...")
 
-    if choice == '1':
-        filename = input("Enter filename (e.g., proxies.txt): ")
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                raw_proxies = f.readlines()
-    
-    elif choice == '2':
-        print("Paste your proxies here (IP:Port or Protocol://IP:Port):")
-        while True:
-            try:
-                line = input()
-                if not line: break
-                raw_proxies.append(line)
-            except EOFError:
-                break
-                
-    elif choice == '3':
-        url = input("Enter Subscription Link: ")
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(url)
-                raw_proxies = resp.text.splitlines()
-        except Exception as e:
-            print(f"Error fetching URL: {e}")
-
-    # استخراج پروکسی‌ها با Regex (تمیز کردن ورودی)
-    clean_proxies = []
-    for p in raw_proxies:
-        found = re.findall(r'((?:socks4|socks5|http|https)://[\w\.:@]+|[\d\.]+\:\d+)', p)
-        clean_proxies.extend(found)
-
-    clean_proxies = list(set(clean_proxies)) # حذف تکراری‌ها
-    print(f"Total proxies to test: {len(clean_proxies)}")
-
-    # اجرای تست همزمان
-    tasks = [check_proxy(p) for p in clean_proxies]
+    tasks = [check_proxy(p) for p in proxies]
     results = await asyncio.gather(*tasks)
 
-    # ذخیره موارد سالم
     valid_proxies = [r for r in results if r]
     
     with open("valid_proxies.txt", "w") as f:
-        for proxy in valid_proxies:
-            f.write(proxy + "\n")
+        for p in valid_proxies:
+            f.write(p + "\n")
 
-    print(f"\n--- Done! ---")
-    print(f"Valid proxies saved: {len(valid_proxies)}")
-    print("Check 'valid_proxies.txt' for results.")
+    print(f"Done! Valid proxies: {len(valid_proxies)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
