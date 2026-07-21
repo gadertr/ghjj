@@ -19,12 +19,17 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    
+    # اجازه دسترسی برای آپدیت کردن فایل‌ها در ریپازیتوری
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # آپدیت شد
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5 # آپدیت شد
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -38,8 +43,11 @@ jobs:
             --links "${{ github.event.inputs.sub_links }}" \
             --file "${{ github.event.inputs.file_path }}"
 
-      - name: Upload Result
-        uses: actions/upload-artifact@v4 # نسخه اصلاح شده
-        with:
-          name: Clean_Proxies
-          path: valid_proxies.txt
+      - name: Commit and Push results
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add valid_proxies.txt
+          # اگر تغییراتی وجود داشت کامیت کن، در غیر این صورت پیام بده
+          git commit -m "Update valid proxies list" || echo "No changes to commit"
+          git push
