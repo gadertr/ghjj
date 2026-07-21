@@ -1,0 +1,45 @@
+name: Professional Proxy Checker
+
+on:
+  workflow_dispatch:
+    inputs:
+      manual_proxies:
+        description: 'Paste proxies here (IP:Port or Protocol://IP:Port)'
+        required: false
+        type: string
+      sub_links:
+        description: 'Subscription Links (comma separated)'
+        required: false
+        type: string
+      file_path:
+        description: 'File name in repo (if any)'
+        required: false
+        default: 'proxies.txt'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Proxy Test
+        run: |
+          python proxy_checker.py \
+            --manual "${{ github.event.inputs.manual_proxies }}" \
+            --links "${{ github.event.inputs.sub_links }}" \
+            --file "${{ github.event.inputs.file_path }}"
+
+      - name: Upload Result
+        uses: actions/upload-artifact@v3
+        with:
+          name: Clean_Proxies
+          path: valid_proxies.txt
